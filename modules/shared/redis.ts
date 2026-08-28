@@ -2,7 +2,9 @@ import IORedis from "ioredis";
 
 const globalForRedis = globalThis as unknown as { redis?: IORedis };
 
-export function getRedisUrl(environment: NodeJS.ProcessEnv = process.env) {
+export function getRedisUrl(
+  environment: Record<string, string | undefined> = process.env,
+) {
   const url = environment.REDIS_URL ?? environment.redis_REDIS_URL;
   if (!url) throw new Error("Redis non configurato");
   return url;
@@ -20,4 +22,3 @@ export function getRedisConnection() {
   if (process.env.NODE_ENV !== "production") globalForRedis.redis = connection;
   return connection;
 }
-
