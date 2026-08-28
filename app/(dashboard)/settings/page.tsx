@@ -1,0 +1,1 @@
+import { Heading } from "@/modules/shared/ui";export default function Settings(){return <><Heading title="Impostazioni" subtitle="Gestione del workspace e dei membri."/><p className="card text-slate-500">Le impostazioni avanzate arriveranno nella prossima iterazione.</p></>}

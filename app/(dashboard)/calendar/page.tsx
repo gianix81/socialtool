@@ -1,0 +1,1 @@
+import { Heading } from "@/modules/shared/ui";export default function Calendar(){return <><Heading title="Calendario" subtitle="Le pubblicazioni programmate appariranno qui."/><p className="card text-slate-500">Nessun contenuto programmato.</p></>}

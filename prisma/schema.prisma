@@ -1,0 +1,217 @@
+generator client {
+  provider = "prisma-client-js"
+}
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum WorkspaceRole {
+  OWNER
+  ADMIN
+  EDITOR
+  VIEWER
+}
+enum SocialPlatform {
+  FACEBOOK
+  INSTAGRAM
+  TIKTOK
+  LINKEDIN
+}
+enum ContentStatus {
+  DRAFT
+  PENDING_APPROVAL
+  SCHEDULED
+  PUBLISHING
+  PUBLISHED
+  FAILED
+  CANCELLED
+}
+enum PublicationStatus {
+  DRAFT
+  PENDING_APPROVAL
+  SCHEDULED
+  PUBLISHING
+  PUBLISHED
+  FAILED
+  CANCELLED
+}
+enum CredentialKind {
+  ENCRYPTED
+  SECRET_REFERENCE
+}
+
+model User {
+  id String @id @default(uuid()) @db.Uuid
+  name String?
+  email String @unique
+  emailVerified DateTime?
+  image String?
+  memberships WorkspaceMember[]
+  drafts ContentDraft[] @relation("DraftAuthor")
+  auditLogs AuditLog[] @relation("AuditActor")
+  accounts Account[]
+  sessions Session[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+model Workspace {
+  id String @id @default(uuid()) @db.Uuid
+  name String
+  slug String @unique
+  members WorkspaceMember[]
+  socialAccounts SocialAccount[]
+  drafts ContentDraft[]
+  mediaAssets MediaAsset[]
+  publications Publication[]
+  auditLogs AuditLog[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+model WorkspaceMember {
+  id String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  workspaceId String @db.Uuid
+  role WorkspaceRole
+  user User @relation(fields:[userId], references:[id], onDelete:Cascade)
+  workspace Workspace @relation(fields:[workspaceId], references:[id], onDelete:Cascade)
+  createdAt DateTime @default(now())
+  @@unique([userId, workspaceId])
+  @@index([workspaceId, userId])
+}
+model SocialAccount {
+  id String @id @default(uuid()) @db.Uuid
+  workspaceId String @db.Uuid
+  platform SocialPlatform
+  providerAccountId String
+  displayName String
+  active Boolean @default(true)
+  workspace Workspace @relation(fields:[workspaceId], references:[id], onDelete:Cascade)
+  credential SocialCredential?
+  targets PublicationTarget[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([workspaceId, platform, providerAccountId])
+  @@index([workspaceId])
+}
+model SocialCredential {
+  id String @id @default(uuid()) @db.Uuid
+  socialAccountId String @unique @db.Uuid
+  kind CredentialKind
+  encryptedPayload String?
+  secretReference String?
+  expiresAt DateTime?
+  socialAccount SocialAccount @relation(fields:[socialAccountId], references:[id], onDelete:Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+model ContentDraft {
+  id String @id @default(uuid()) @db.Uuid
+  workspaceId String @db.Uuid
+  authorId String @db.Uuid
+  body String
+  variants Json @default("{}")
+  targetPlatforms SocialPlatform[]
+  scheduledAt DateTime?
+  status ContentStatus @default(DRAFT)
+  workspace Workspace @relation(fields:[workspaceId], references:[id], onDelete:Cascade)
+  author User @relation("DraftAuthor", fields:[authorId], references:[id])
+  media MediaAsset[]
+  publications Publication[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([workspaceId, createdAt])
+}
+model MediaAsset {
+  id String @id @default(uuid()) @db.Uuid
+  workspaceId String @db.Uuid
+  draftId String? @db.Uuid
+  storageKey String
+  mimeType String
+  sizeBytes Int
+  workspace Workspace @relation(fields:[workspaceId], references:[id], onDelete:Cascade)
+  draft ContentDraft? @relation(fields:[draftId], references:[id], onDelete:SetNull)
+  createdAt DateTime @default(now())
+  @@index([workspaceId])
+}
+model Publication {
+  id String @id @default(uuid()) @db.Uuid
+  workspaceId String @db.Uuid
+  draftId String @db.Uuid
+  status PublicationStatus @default(DRAFT)
+  scheduledAt DateTime?
+  publishedAt DateTime?
+  failureReason String?
+  workspace Workspace @relation(fields:[workspaceId], references:[id], onDelete:Cascade)
+  draft ContentDraft @relation(fields:[draftId], references:[id])
+  targets PublicationTarget[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([workspaceId, status])
+}
+model PublicationTarget {
+  id String @id @default(uuid()) @db.Uuid
+  publicationId String @db.Uuid
+  socialAccountId String @db.Uuid
+  platform SocialPlatform
+  status PublicationStatus @default(DRAFT)
+  externalPostId String?
+  publication Publication @relation(fields:[publicationId], references:[id], onDelete:Cascade)
+  socialAccount SocialAccount @relation(fields:[socialAccountId], references:[id])
+  metrics PostMetric[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([publicationId, socialAccountId])
+}
+model PostMetric {
+  id String @id @default(uuid()) @db.Uuid
+  publicationTargetId String @db.Uuid
+  metricKey String
+  value Decimal @db.Decimal(20,4)
+  dimensions Json?
+  measuredAt DateTime @default(now())
+  target PublicationTarget @relation(fields:[publicationTargetId], references:[id], onDelete:Cascade)
+  @@index([publicationTargetId, metricKey, measuredAt])
+}
+model AuditLog {
+  id String @id @default(uuid()) @db.Uuid
+  workspaceId String @db.Uuid
+  actorId String? @db.Uuid
+  action String
+  resourceType String
+  resourceId String?
+  metadata Json?
+  workspace Workspace @relation(fields:[workspaceId], references:[id], onDelete:Cascade)
+  actor User? @relation("AuditActor", fields:[actorId], references:[id], onDelete:SetNull)
+  createdAt DateTime @default(now())
+  @@index([workspaceId, createdAt])
+}
+model Account {
+  id String @id @default(cuid())
+  userId String @db.Uuid
+  type String
+  provider String
+  providerAccountId String
+  refresh_token String? @db.Text
+  access_token String? @db.Text
+  expires_at Int?
+  token_type String?
+  scope String?
+  id_token String? @db.Text
+  session_state String?
+  user User @relation(fields:[userId], references:[id], onDelete:Cascade)
+  @@unique([provider, providerAccountId])
+}
+model Session {
+  id String @id @default(cuid())
+  sessionToken String @unique
+  userId String @db.Uuid
+  expires DateTime
+  user User @relation(fields:[userId], references:[id], onDelete:Cascade)
+}
+model VerificationToken {
+  identifier String
+  token String @unique
+  expires DateTime
+  @@unique([identifier, token])
+}
