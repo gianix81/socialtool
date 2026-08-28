@@ -2,15 +2,23 @@ import { PrismaClient } from "@prisma/client";
 
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
 
-// The constructor does not connect. This valid fallback only allows Next.js to
-// inspect route modules at build time; runtime queries still fail closed until
-// the deployment supplies a real DATABASE_URL.
-const databaseUrl =
-  process.env.DATABASE_URL ??
-  "postgresql://unconfigured:unconfigured@127.0.0.1:5432/unconfigured";
+function getPrismaClient(): PrismaClient {
+  if (globalForPrisma.prisma) return globalForPrisma.prisma;
 
-export const db =
-  globalForPrisma.prisma ??
-  new PrismaClient({ datasources: { db: { url: databaseUrl } } });
+  const client = new PrismaClient();
+  if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = client;
+  return client;
+}
 
-if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = db;
+/**
+ * Prisma is deliberately lazy. Next.js imports dynamic page modules while
+ * collecting build metadata on Vercel; constructing the client at module scope
+ * would make that build depend on runtime-only environment variables.
+ */
+export const db = new Proxy({} as PrismaClient, {
+  get(_target, property) {
+    const client = getPrismaClient();
+    const value = Reflect.get(client, property, client) as unknown;
+    return typeof value === "function" ? value.bind(client) : value;
+  },
+});
